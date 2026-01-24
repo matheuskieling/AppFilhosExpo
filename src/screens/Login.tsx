@@ -3,16 +3,20 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput,
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import Constants from 'expo-constants';
 import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
-import { GOOGLE_WEB_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID } from '../config/secrets';
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Get Google OAuth client IDs from app config (set via EAS secrets or local env)
+const googleWebClientId = Constants.expoConfig?.extra?.googleWebClientId;
+const googleAndroidClientId = Constants.expoConfig?.extra?.googleAndroidClientId;
+
 export default function Login() {
   const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    webClientId: GOOGLE_WEB_CLIENT_ID,
+    androidClientId: googleAndroidClientId,
+    webClientId: googleWebClientId,
   });
 
   const [email, setEmail] = useState('');
