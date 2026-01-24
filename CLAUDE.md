@@ -74,3 +74,5 @@ Um usuário gostaria de:
 5. Ter uma listagem de produtos (inclui nessa resposta o histórico de compra do produto)
 6. Ter uma listagem do histórico de compras (a lista é ordenada por última compra e traz de todos os produtos)
 
+## OBSERVACAO IMPORTANTE
+  Esse aplicativo só vai ser usado por mim e pela minha esposa!!!
