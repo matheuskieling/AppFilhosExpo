@@ -9,12 +9,15 @@ import {
   Alert,
   RefreshControl,
   Animated,
+  TextInput,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { getProducts, getCategories } from '../services/firestore';
 import { Product, Category } from '../types';
+import haptics from '../utils/haptics';
 
 // Skeleton Loading Component
 const SkeletonCard = () => {
@@ -109,14 +112,23 @@ interface ProductWithCategory extends Product {
   daysUntilEmpty: number;
 }
 
+type FilterType = 'all' | 'urgent' | string;
+
 export default function ProductsList({ navigation }: any) {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const fabScale = useRef(new Animated.Value(1)).current;
+  const searchAnimation = useRef(new Animated.Value(0)).current;
 
   const [products, setProducts] = useState<ProductWithCategory[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Search and filter state
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   const handleFabPressIn = () => {
     Animated.spring(fabScale, {
@@ -134,6 +146,20 @@ export default function ProductsList({ navigation }: any) {
     }).start();
   };
 
+  const toggleSearch = () => {
+    haptics.light();
+    const toValue = searchVisible ? 0 : 1;
+    setSearchVisible(!searchVisible);
+    Animated.timing(searchAnimation, {
+      toValue,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+    if (searchVisible) {
+      setSearchQuery('');
+    }
+  };
+
   const loadData = useCallback(async () => {
     if (!user) return;
 
@@ -143,13 +169,13 @@ export default function ProductsList({ navigation }: any) {
         getCategories(user.uid),
       ]);
 
-      // Mapeia categorias para lookup rápido
+      setCategories(categoriesData);
+
       const categoryMap = new Map<string, string>();
       categoriesData.forEach((cat: Category) => {
         if (cat.id) categoryMap.set(cat.id, cat.name);
       });
 
-      // Adiciona nome da categoria e dias até acabar
       const productsWithDetails = productsData.map((product: Product) => ({
         ...product,
         categoryName: product.categoryId ? categoryMap.get(product.categoryId) : undefined,
@@ -158,9 +184,7 @@ export default function ProductsList({ navigation }: any) {
           : Infinity,
       }));
 
-      // Ordena por dias até acabar (mais urgentes primeiro)
       productsWithDetails.sort((a, b) => a.daysUntilEmpty - b.daysUntilEmpty);
-
       setProducts(productsWithDetails);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
@@ -187,28 +211,64 @@ export default function ProductsList({ navigation }: any) {
     loadData();
   };
 
-  const handleSignOut = () => {
-    Alert.alert('Sair', 'Deseja realmente sair?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Sair', onPress: signOut, style: 'destructive' },
-    ]);
+  const getStatusColor = (daysUntilEmpty: number, notificationDays: number) => {
+    if (daysUntilEmpty <= 0) return '#dc3545';
+    if (daysUntilEmpty <= notificationDays) return '#b8860b';
+    return '#28a745';
   };
 
-  const getStatusColor = (daysUntilEmpty: number, notificationDays: number) => {
-    if (daysUntilEmpty <= 0) return '#dc3545'; // Vermelho - acabou
-    if (daysUntilEmpty <= notificationDays) return '#b8860b'; // Dark goldenrod - perto de acabar (better contrast)
-    return '#28a745'; // Verde - ok
+  const getStatus = (daysUntilEmpty: number, notificationDays: number): 'urgent' | 'attention' | 'ok' => {
+    if (daysUntilEmpty <= 0) return 'urgent';
+    if (daysUntilEmpty <= notificationDays) return 'attention';
+    return 'ok';
   };
+
+  // Filter products
+  const filteredProducts = products.filter(product => {
+    // Search filter
+    if (searchQuery && !product.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    // Category/Status filter
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'urgent') {
+      const status = getStatus(product.daysUntilEmpty, product.notificationDays);
+      return status === 'urgent' || status === 'attention';
+    }
+    return product.categoryId === activeFilter;
+  });
+
+  // Group products by status
+  const urgentProducts = filteredProducts.filter(p => {
+    const status = getStatus(p.daysUntilEmpty, p.notificationDays);
+    return status === 'urgent' || status === 'attention';
+  });
+  const okProducts = filteredProducts.filter(p => {
+    const status = getStatus(p.daysUntilEmpty, p.notificationDays);
+    return status === 'ok';
+  });
+
+  const searchHeight = searchAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 50],
+  });
 
   const renderProduct = ({ item }: { item: ProductWithCategory }) => {
     const statusColor = getStatusColor(item.daysUntilEmpty, item.notificationDays);
+    const status = getStatus(item.daysUntilEmpty, item.notificationDays);
+    const isUrgent = status === 'urgent';
+    const needsAttention = status === 'attention';
     const progressPercent = item.totalQuantity > 0
       ? Math.min(1, Math.max(0, item.remainingQuantity / item.totalQuantity))
       : 0;
 
     return (
       <TouchableOpacity
-        style={styles.productCard}
+        style={[
+          styles.productCard,
+          isUrgent && styles.productCardUrgent,
+          needsAttention && styles.productCardAttention,
+        ]}
         onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
         activeOpacity={0.7}
       >
@@ -216,7 +276,7 @@ export default function ProductsList({ navigation }: any) {
           <Image source={{ uri: item.photo }} style={styles.productImage} />
         ) : (
           <View style={[styles.productImage, styles.placeholderImage]}>
-            <Ionicons name="cube-outline" size={30} color="#ccc" />
+            <Ionicons name="paw-outline" size={30} color="#ccc" />
           </View>
         )}
 
@@ -224,7 +284,15 @@ export default function ProductsList({ navigation }: any) {
           <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
             {item.name}
           </Text>
-          {item.categoryName && (
+          {isUrgent && (
+            <Text style={[styles.urgentLabel, { color: '#dc3545' }]}>ACABOU!</Text>
+          )}
+          {needsAttention && (
+            <Text style={[styles.urgentLabel, { color: '#b8860b' }]}>
+              Comprar em {item.daysUntilEmpty} dias
+            </Text>
+          )}
+          {item.categoryName && !isUrgent && !needsAttention && (
             <Text style={styles.productCategory} numberOfLines={1} ellipsizeMode="tail">
               {item.categoryName}
             </Text>
@@ -232,15 +300,11 @@ export default function ProductsList({ navigation }: any) {
           <Text style={styles.productQuantity}>
             Restante: {Math.round(item.remainingQuantity)} / {Math.round(item.totalQuantity)}
           </Text>
-          {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
             <View
               style={[
                 styles.progressBar,
-                {
-                  width: `${progressPercent * 100}%`,
-                  backgroundColor: statusColor
-                }
+                { width: `${progressPercent * 100}%`, backgroundColor: statusColor }
               ]}
             />
           </View>
@@ -252,7 +316,7 @@ export default function ProductsList({ navigation }: any) {
               {item.daysUntilEmpty === Infinity
                 ? '∞'
                 : item.daysUntilEmpty <= 0
-                  ? 'Acabou'
+                  ? '!'
                   : `${item.daysUntilEmpty}d`}
             </Text>
           </View>
@@ -261,13 +325,23 @@ export default function ProductsList({ navigation }: any) {
     );
   };
 
+  const renderSectionHeader = (title: string, count: number, color: string) => (
+    <View style={styles.sectionHeader}>
+      <View style={[styles.sectionDot, { backgroundColor: color }]} />
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={[styles.sectionBadge, { backgroundColor: color }]}>
+        <Text style={styles.sectionBadgeText}>{count}</Text>
+      </View>
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Text style={styles.title}>Meus Produtos</Text>
+          <Text style={styles.title}>Produtos</Text>
           <TouchableOpacity activeOpacity={0.7}>
-            <Ionicons name="log-out-outline" size={24} color="#666" />
+            <Ionicons name="search-outline" size={24} color="#666" />
           </TouchableOpacity>
         </View>
         <View style={styles.listContent}>
@@ -283,33 +357,114 @@ export default function ProductsList({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <Text style={styles.title}>Meus Produtos</Text>
-        <TouchableOpacity onPress={handleSignOut} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={24} color="#666" />
+        <Text style={styles.title}>Produtos</Text>
+        <TouchableOpacity onPress={toggleSearch} activeOpacity={0.7}>
+          <Ionicons name={searchVisible ? "close" : "search-outline"} size={24} color="#666" />
         </TouchableOpacity>
       </View>
 
-      {products.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="cube-outline" size={60} color="#ccc" />
-          <Text style={styles.emptyText}>Nenhum produto cadastrado</Text>
-          <Text style={styles.emptySubtext}>
-            Toque no + para adicionar seu primeiro produto
-          </Text>
+      {/* Animated Search Bar */}
+      <Animated.View style={[styles.searchContainer, { height: searchHeight, opacity: searchAnimation }]}>
+        <View style={styles.searchInputContainer}>
+          <Ionicons name="search" size={20} color="#888" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar produtos..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#888"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color="#888" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </Animated.View>
+
+      {/* Filter Chips */}
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
           <TouchableOpacity
-            style={styles.emptyButton}
-            onPress={() => navigation.navigate('ProductForm')}
-            activeOpacity={0.7}
+            style={[styles.filterChip, activeFilter === 'all' && styles.filterChipActive]}
+            onPress={() => { setActiveFilter('all'); haptics.light(); }}
           >
-            <Ionicons name="add-circle-outline" size={20} color="#fff" />
-            <Text style={styles.emptyButtonText}>Adicionar Produto</Text>
+            <Text style={[styles.filterChipText, activeFilter === 'all' && styles.filterChipTextActive]}>
+              Todos
+            </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterChip, activeFilter === 'urgent' && styles.filterChipUrgent]}
+            onPress={() => { setActiveFilter('urgent'); haptics.light(); }}
+          >
+            <Ionicons name="alert-circle" size={14} color={activeFilter === 'urgent' ? '#fff' : '#dc3545'} />
+            <Text style={[styles.filterChipText, activeFilter === 'urgent' && styles.filterChipTextActive]}>
+              Urgentes
+            </Text>
+          </TouchableOpacity>
+          {categories.map(cat => (
+            <TouchableOpacity
+              key={cat.id}
+              style={[styles.filterChip, activeFilter === cat.id && styles.filterChipActive]}
+              onPress={() => { setActiveFilter(cat.id!); haptics.light(); }}
+            >
+              <Text style={[styles.filterChipText, activeFilter === cat.id && styles.filterChipTextActive]}>
+                {cat.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {filteredProducts.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          {products.length === 0 ? (
+            <>
+              <View style={styles.emptyIconContainer}>
+                <Ionicons name="paw-outline" size={60} color="#4285F4" />
+              </View>
+              <Text style={styles.emptyTitle}>Nenhum produto ainda</Text>
+              <Text style={styles.emptySubtext}>
+                Adicione seu primeiro produto para começar a controlar o estoque dos pets
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyButton}
+                onPress={() => navigation.navigate('ProductForm')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add-circle-outline" size={20} color="#fff" />
+                <Text style={styles.emptyButtonText}>Adicionar Produto</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Ionicons name="search-outline" size={60} color="#ccc" />
+              <Text style={styles.emptyText}>Nenhum produto encontrado</Text>
+              <TouchableOpacity
+                style={styles.clearFilterButton}
+                onPress={() => { setActiveFilter('all'); setSearchQuery(''); }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.clearFilterText}>Limpar filtros</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       ) : (
         <FlatList
-          data={products}
-          renderItem={renderProduct}
-          keyExtractor={(item) => item.id || ''}
+          data={[
+            ...(urgentProducts.length > 0 ? [{ type: 'header' as const, title: 'Precisa de Atenção', count: urgentProducts.length, color: '#dc3545' }] : []),
+            ...urgentProducts.map(p => ({ type: 'product' as const, data: p })),
+            ...(okProducts.length > 0 ? [{ type: 'header' as const, title: 'Estoque OK', count: okProducts.length, color: '#28a745' }] : []),
+            ...okProducts.map(p => ({ type: 'product' as const, data: p })),
+          ]}
+          renderItem={({ item }) => {
+            if (item.type === 'header') {
+              return renderSectionHeader(item.title, item.count, item.color);
+            }
+            return renderProduct({ item: item.data });
+          }}
+          keyExtractor={(item, index) => item.type === 'header' ? `header-${index}` : item.data.id || String(index)}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4285F4']} />
@@ -328,30 +483,6 @@ export default function ProductsList({ navigation }: any) {
           <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
       </Animated.View>
-
-      <View style={[styles.tabBar, { paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
-        <TouchableOpacity style={styles.tabItem} activeOpacity={0.7}>
-          <Ionicons name="cube" size={24} color="#4285F4" />
-          <Text style={[styles.tabText, styles.tabTextActive]}>Produtos</Text>
-          <View style={styles.tabIndicator} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => navigation.navigate('Categories')}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="folder-outline" size={24} color="#666" />
-          <Text style={styles.tabText}>Categorias</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => navigation.navigate('PurchaseHistory')}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="receipt-outline" size={24} color="#666" />
-          <Text style={styles.tabText}>Histórico</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -360,11 +491,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -380,9 +506,99 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  // Search
+  searchContainer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 15,
+    overflow: 'hidden',
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 40,
+    marginBottom: 10,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#333',
+  },
+  // Filters
+  filterContainer: {
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  filterScroll: {
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginRight: 8,
+    gap: 4,
+  },
+  filterChipActive: {
+    backgroundColor: '#4285F4',
+    borderColor: '#4285F4',
+  },
+  filterChipUrgent: {
+    backgroundColor: '#dc3545',
+    borderColor: '#dc3545',
+  },
+  filterChipText: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+  },
+  filterChipTextActive: {
+    color: '#fff',
+  },
+  // Section Headers
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    flex: 1,
+  },
+  sectionBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  sectionBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Product Card
   listContent: {
     padding: 15,
-    paddingBottom: 150,
+    paddingBottom: 100,
   },
   productCard: {
     flexDirection: 'row',
@@ -393,9 +609,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  productCardUrgent: {
+    backgroundColor: '#fff5f5',
+    borderLeftWidth: 4,
+    borderLeftColor: '#dc3545',
+  },
+  productCardAttention: {
+    backgroundColor: '#fffbeb',
+    borderLeftWidth: 4,
+    borderLeftColor: '#b8860b',
   },
   productImage: {
     width: 60,
@@ -415,6 +641,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+  },
+  urgentLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 2,
   },
   productCategory: {
     fontSize: 12,
@@ -441,30 +672,48 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
   },
   statusText: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
   },
+  // Empty State
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingBottom: 100,
+    paddingHorizontal: 40,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#e8f0fe',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#666',
     marginTop: 15,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#999',
-    marginTop: 5,
+    color: '#888',
+    textAlign: 'center',
+    marginBottom: 20,
   },
   emptyButton: {
     flexDirection: 'row',
@@ -473,18 +722,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
-    marginTop: 20,
+    gap: 8,
   },
   emptyButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 8,
   },
+  clearFilterButton: {
+    marginTop: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  clearFilterText: {
+    color: '#4285F4',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  // FAB
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 100,
+    bottom: 20,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -501,35 +760,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#4285F4',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  tabBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 10,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  tabText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  tabTextActive: {
-    color: '#4285F4',
-  },
-  tabIndicator: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#4285F4',
-    marginTop: 4,
   },
 });
