@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,13 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Animated,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuth } from '../contexts/AuthContext';
 import { getProduct, getPurchases, addPurchase, deletePurchase, deleteProduct, getCategories, updateProduct } from '../services/firestore';
 import { Product, Purchase, Category } from '../types';
@@ -21,6 +26,12 @@ import { Product, Purchase, Category } from '../types';
 export default function ProductDetail({ navigation, route }: any) {
   const { user } = useAuth();
   const { productId } = route.params;
+  const insets = useSafeAreaInsets();
+
+  // Image animation
+  const imageScale = useRef(new Animated.Value(0.8)).current;
+  const imageOpacity = useRef(new Animated.Value(0)).current;
+  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
 
   const [product, setProduct] = useState<Product | null>(null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -32,6 +43,25 @@ export default function ProductDetail({ navigation, route }: any) {
   const [showCalibrateModal, setShowCalibrateModal] = useState(false);
   const [calibrateQuantity, setCalibrateQuantity] = useState('1');
   const [savingCalibrate, setSavingCalibrate] = useState(false);
+
+  // Image entrance animation
+  useEffect(() => {
+    if (!loading && product) {
+      Animated.parallel([
+        Animated.spring(imageScale, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(imageOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [loading, product]);
 
   useEffect(() => {
     loadData();
@@ -78,15 +108,18 @@ export default function ProductDetail({ navigation, route }: any) {
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingPurchase(true);
     try {
       await addPurchase(user.uid, productId, qty, product.totalQuantity);
       setShowPurchaseModal(false);
       setPurchaseQuantity('1');
       loadData();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Sucesso', `Compra de ${qty} unidade(s) registrada!`);
     } catch (error) {
       console.error('Erro ao adicionar compra:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Erro', 'Não foi possível registrar a compra');
     } finally {
       setSavingPurchase(false);
@@ -102,6 +135,7 @@ export default function ProductDetail({ navigation, route }: any) {
       return;
     }
 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSavingCalibrate(true);
     try {
       const newRemaining = qty * product.totalQuantity;
@@ -109,9 +143,11 @@ export default function ProductDetail({ navigation, route }: any) {
       setShowCalibrateModal(false);
       setCalibrateQuantity('1');
       loadData();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Sucesso', `Estoque calibrado para ${Math.round(newRemaining)} unidades`);
     } catch (error) {
       console.error('Erro ao calibrar:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Erro', 'Não foi possível calibrar o estoque');
     } finally {
       setSavingCalibrate(false);
@@ -205,14 +241,30 @@ export default function ProductDetail({ navigation, route }: any) {
 
   const daysUntilEmpty = getDaysUntilEmpty();
 
+  // Render swipe-to-delete action
+  const renderRightActions = (purchase: Purchase) => {
+    return (
+      <TouchableOpacity
+        style={styles.swipeDeleteButton}
+        onPress={() => {
+          swipeableRefs.current.get(purchase.id!)?.close();
+          handleDeletePurchase(purchase);
+        }}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="trash" size={24} color="#fff" />
+      </TouchableOpacity>
+    );
+  };
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+    <GestureHandlerRootView style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Detalhes</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('ProductForm', { productId })}>
+        <TouchableOpacity onPress={() => navigation.navigate('ProductForm', { productId })} activeOpacity={0.7}>
           <Ionicons name="create-outline" size={24} color="#4285F4" />
         </TouchableOpacity>
       </View>
@@ -220,13 +272,15 @@ export default function ProductDetail({ navigation, route }: any) {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Foto e Nome */}
         <View style={styles.productHeader}>
-          {product.photo ? (
-            <Image source={{ uri: product.photo }} style={styles.productImage} />
-          ) : (
-            <View style={[styles.productImage, styles.placeholderImage]}>
-              <Ionicons name="cube-outline" size={50} color="#ccc" />
-            </View>
-          )}
+          <Animated.View style={{ transform: [{ scale: imageScale }], opacity: imageOpacity }}>
+            {product.photo ? (
+              <Image source={{ uri: product.photo }} style={styles.productImage} />
+            ) : (
+              <View style={[styles.productImage, styles.placeholderImage]}>
+                <Ionicons name="cube-outline" size={50} color="#ccc" />
+              </View>
+            )}
+          </Animated.View>
           <Text style={styles.productName}>{product.name}</Text>
           {categoryName && <Text style={styles.categoryName}>{categoryName}</Text>}
         </View>
@@ -272,7 +326,11 @@ export default function ProductDetail({ navigation, route }: any) {
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={styles.purchaseButton}
-            onPress={() => setShowPurchaseModal(true)}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowPurchaseModal(true);
+            }}
+            activeOpacity={0.7}
           >
             <Ionicons name="cart-outline" size={20} color="#fff" />
             <Text style={styles.purchaseButtonText}>Compra</Text>
@@ -280,7 +338,11 @@ export default function ProductDetail({ navigation, route }: any) {
 
           <TouchableOpacity
             style={styles.calibrateButton}
-            onPress={() => setShowCalibrateModal(true)}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowCalibrateModal(true);
+            }}
+            activeOpacity={0.7}
           >
             <Ionicons name="sync-outline" size={20} color="#fff" />
             <Text style={styles.calibrateButtonText}>Calibrar</Text>
@@ -293,28 +355,40 @@ export default function ProductDetail({ navigation, route }: any) {
           <Text style={styles.emptyText}>Nenhuma compra registrada</Text>
         ) : (
           purchases.map((purchase) => (
-            <View key={purchase.id} style={styles.purchaseItem}>
-              <View style={styles.purchaseInfo}>
-                <Text style={styles.purchaseQuantity}>{purchase.quantity} unidade(s)</Text>
-                <Text style={styles.purchaseDate}>
-                  {purchase.date.toLocaleDateString('pt-BR')}
+            <Swipeable
+              key={purchase.id}
+              ref={(ref) => {
+                if (ref && purchase.id) {
+                  swipeableRefs.current.set(purchase.id, ref);
+                }
+              }}
+              renderRightActions={() => renderRightActions(purchase)}
+              overshootRight={false}
+            >
+              <View style={styles.purchaseItem}>
+                <View style={styles.purchaseInfo}>
+                  <Text style={styles.purchaseQuantity}>{purchase.quantity} unidade(s)</Text>
+                  <Text style={styles.purchaseDate}>
+                    {purchase.date.toLocaleDateString('pt-BR')}
+                  </Text>
+                </View>
+                <Text style={styles.purchaseTotal}>
+                  +{Math.round(purchase.quantity * product.totalQuantity)}
                 </Text>
+                <TouchableOpacity
+                  style={styles.purchaseDeleteButton}
+                  onPress={() => handleDeletePurchase(purchase)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#dc3545" />
+                </TouchableOpacity>
               </View>
-              <Text style={styles.purchaseTotal}>
-                +{Math.round(purchase.quantity * product.totalQuantity)}
-              </Text>
-              <TouchableOpacity
-                style={styles.purchaseDeleteButton}
-                onPress={() => handleDeletePurchase(purchase)}
-              >
-                <Ionicons name="trash-outline" size={18} color="#dc3545" />
-              </TouchableOpacity>
-            </View>
+            </Swipeable>
           ))
         )}
 
         {/* Botão Excluir */}
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete} activeOpacity={0.7}>
           <Ionicons name="trash-outline" size={20} color="#dc3545" />
           <Text style={styles.deleteButtonText}>Excluir Produto</Text>
         </TouchableOpacity>
@@ -333,6 +407,7 @@ export default function ProductDetail({ navigation, route }: any) {
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowPurchaseModal(false)} />
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Registrar Compra</Text>
             <Text style={styles.modalLabel}>Quantas unidades você comprou?</Text>
@@ -343,6 +418,7 @@ export default function ProductDetail({ navigation, route }: any) {
               keyboardType="number-pad"
               placeholder="1"
               placeholderTextColor="#999"
+              returnKeyType="done"
             />
             <Text style={styles.modalInfo}>
               Cada unidade tem {product.totalQuantity} de quantidade total
@@ -351,6 +427,7 @@ export default function ProductDetail({ navigation, route }: any) {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setShowPurchaseModal(false)}
+                activeOpacity={0.7}
               >
                 <Text style={styles.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
@@ -358,6 +435,7 @@ export default function ProductDetail({ navigation, route }: any) {
                 style={[styles.modalConfirmButton, savingPurchase && styles.modalButtonDisabled]}
                 onPress={handleAddPurchase}
                 disabled={savingPurchase}
+                activeOpacity={0.7}
               >
                 {savingPurchase ? (
                   <ActivityIndicator color="#fff" size="small" />
@@ -381,6 +459,7 @@ export default function ProductDetail({ navigation, route }: any) {
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowCalibrateModal(false)} />
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Calibrar Estoque</Text>
             <Text style={styles.modalLabel}>Quantas unidades você tem em estoque?</Text>
@@ -391,6 +470,7 @@ export default function ProductDetail({ navigation, route }: any) {
               keyboardType="decimal-pad"
               placeholder="1"
               placeholderTextColor="#999"
+              returnKeyType="done"
             />
             <Text style={styles.modalInfo}>
               Resultado: {Math.round(parseFloat(calibrateQuantity || '0') * (product?.totalQuantity || 0))} de quantidade restante
@@ -399,6 +479,7 @@ export default function ProductDetail({ navigation, route }: any) {
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setShowCalibrateModal(false)}
+                activeOpacity={0.7}
               >
                 <Text style={styles.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
@@ -406,6 +487,7 @@ export default function ProductDetail({ navigation, route }: any) {
                 style={[styles.modalConfirmButton, styles.calibrateConfirmButton, savingCalibrate && styles.modalButtonDisabled]}
                 onPress={handleCalibrate}
                 disabled={savingCalibrate}
+                activeOpacity={0.7}
               >
                 {savingCalibrate ? (
                   <ActivityIndicator color="#fff" size="small" />
@@ -417,7 +499,7 @@ export default function ProductDetail({ navigation, route }: any) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -436,7 +518,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: 50,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
@@ -501,7 +582,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   statusWarning: {
-    color: '#ffc107',
+    color: '#b8860b',
   },
   statusDanger: {
     color: '#dc3545',
@@ -585,7 +666,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   purchaseDeleteButton: {
-    padding: 8,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginLeft: 10,
   },
   purchaseQuantity: {
@@ -602,6 +686,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#28a745',
+  },
+  swipeDeleteButton: {
+    backgroundColor: '#dc3545',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 70,
+    marginBottom: 10,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
   },
   deleteButton: {
     flexDirection: 'row',
@@ -620,6 +713,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   modalContent: {
     backgroundColor: '#fff',

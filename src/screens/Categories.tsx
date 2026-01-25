@@ -11,16 +11,22 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { getCategories, createCategory, updateCategory, deleteCategory } from '../services/firestore';
 import { Category } from '../types';
 
 export default function Categories({ navigation }: any) {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryName, setCategoryName] = useState('');
@@ -41,7 +47,13 @@ export default function Categories({ navigation }: any) {
       Alert.alert('Erro', 'Não foi possível carregar as categorias');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadCategories();
   };
 
   const openModal = (category?: Category) => {
@@ -108,11 +120,11 @@ export default function Categories({ navigation }: any) {
 
   const renderCategory = ({ item }: { item: Category }) => (
     <View style={styles.categoryItem}>
-      <TouchableOpacity style={styles.categoryContent} onPress={() => openModal(item)}>
+      <TouchableOpacity style={styles.categoryContent} onPress={() => openModal(item)} activeOpacity={0.7}>
         <Ionicons name="folder-outline" size={24} color="#4285F4" />
         <Text style={styles.categoryName}>{item.name}</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => handleDelete(item)}>
+      <TouchableOpacity onPress={() => handleDelete(item)} style={styles.deleteButton} activeOpacity={0.7}>
         <Ionicons name="trash-outline" size={20} color="#dc3545" />
       </TouchableOpacity>
     </View>
@@ -128,12 +140,12 @@ export default function Categories({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.title}>Categorias</Text>
-        <TouchableOpacity onPress={() => openModal()}>
+        <TouchableOpacity onPress={() => openModal()} activeOpacity={0.7}>
           <Ionicons name="add" size={28} color="#4285F4" />
         </TouchableOpacity>
       </View>
@@ -143,6 +155,14 @@ export default function Categories({ navigation }: any) {
           <Ionicons name="folder-open-outline" size={60} color="#ccc" />
           <Text style={styles.emptyText}>Nenhuma categoria</Text>
           <Text style={styles.emptySubtext}>Toque no + para criar uma categoria</Text>
+          <TouchableOpacity
+            style={styles.emptyButton}
+            onPress={() => openModal()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle-outline" size={20} color="#fff" />
+            <Text style={styles.emptyButtonText}>Criar Categoria</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -150,6 +170,9 @@ export default function Categories({ navigation }: any) {
           renderItem={renderCategory}
           keyExtractor={(item) => item.id || ''}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4285F4']} />
+          }
         />
       )}
 
@@ -164,6 +187,7 @@ export default function Categories({ navigation }: any) {
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowModal(false)} />
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
               {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
@@ -175,11 +199,14 @@ export default function Categories({ navigation }: any) {
               placeholder="Nome da categoria"
               placeholderTextColor="#999"
               autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleSave}
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => setShowModal(false)}
+                activeOpacity={0.7}
               >
                 <Text style={styles.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
@@ -187,6 +214,7 @@ export default function Categories({ navigation }: any) {
                 style={[styles.modalSaveButton, saving && styles.modalButtonDisabled]}
                 onPress={handleSave}
                 disabled={saving}
+                activeOpacity={0.7}
               >
                 {saving ? (
                   <ActivityIndicator color="#fff" size="small" />
@@ -217,7 +245,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: 50,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
@@ -263,11 +290,39 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 5,
   },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4285F4',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  emptyButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  deleteButton: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   modalContent: {
     backgroundColor: '#fff',
