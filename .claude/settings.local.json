@@ -17,7 +17,8 @@
       "Bash(timeout:*)",
       "Bash(firebase functions:log:*)",
       "Bash(npx expo-doctor:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(git add:*)"
     ]
   }
 }
