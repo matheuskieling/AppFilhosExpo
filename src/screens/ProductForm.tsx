@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,10 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  TextInput as TextInputType,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
 import { createProduct, updateProduct, getProduct, getCategories } from '../services/firestore';
@@ -24,6 +26,13 @@ export default function ProductForm({ navigation, route }: any) {
   const { user } = useAuth();
   const productId = route.params?.productId;
   const isEditing = !!productId;
+  const insets = useSafeAreaInsets();
+
+  // Refs for keyboard navigation
+  const totalQuantityRef = useRef<TextInputType>(null);
+  const dailyUsageRef = useRef<TextInputType>(null);
+  const remainingQuantityRef = useRef<TextInputType>(null);
+  const notificationDaysRef = useRef<TextInputType>(null);
 
   const [name, setName] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
@@ -180,8 +189,8 @@ export default function ProductForm({ navigation, route }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.title}>{isEditing ? 'Editar Produto' : 'Novo Produto'}</Text>
@@ -197,9 +206,10 @@ export default function ProductForm({ navigation, route }: any) {
           contentContainerStyle={styles.formContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
         {/* Foto */}
-        <TouchableOpacity style={styles.photoContainer} onPress={showImageOptions}>
+        <TouchableOpacity style={styles.photoContainer} onPress={showImageOptions} activeOpacity={0.7}>
           {photo ? (
             <Image source={{ uri: photo }} style={styles.photo} />
           ) : (
@@ -218,6 +228,8 @@ export default function ProductForm({ navigation, route }: any) {
           onChangeText={setName}
           placeholder="Ex: Ração Golden"
           placeholderTextColor="#999"
+          returnKeyType="next"
+          onSubmitEditing={() => totalQuantityRef.current?.focus()}
         />
 
         {/* Categoria */}
@@ -238,51 +250,66 @@ export default function ProductForm({ navigation, route }: any) {
         {/* Quantidade Total */}
         <Text style={styles.label}>Quantidade total (por unidade) *</Text>
         <TextInput
+          ref={totalQuantityRef}
           style={styles.input}
           value={totalQuantity}
           onChangeText={setTotalQuantity}
           placeholder="Ex: 15 (kg por saco)"
           placeholderTextColor="#999"
           keyboardType="decimal-pad"
+          returnKeyType="next"
+          onSubmitEditing={() => dailyUsageRef.current?.focus()}
         />
+        <Text style={styles.helperText}>Ex: 15kg para um saco de ração</Text>
 
         {/* Uso Diário */}
         <Text style={styles.label}>Quantidade usada por dia *</Text>
         <TextInput
+          ref={dailyUsageRef}
           style={styles.input}
           value={dailyUsage}
           onChangeText={setDailyUsage}
           placeholder="Ex: 0.5 (kg por dia)"
           placeholderTextColor="#999"
           keyboardType="decimal-pad"
+          returnKeyType="next"
+          onSubmitEditing={() => remainingQuantityRef.current?.focus()}
         />
+        <Text style={styles.helperText}>Ex: 0.3 significa 300g por dia</Text>
 
         {/* Quantidade Restante */}
         <Text style={styles.label}>Quantidade restante atual</Text>
         <TextInput
+          ref={remainingQuantityRef}
           style={styles.input}
           value={remainingQuantity}
           onChangeText={setRemainingQuantity}
           placeholder="Deixe vazio para usar quantidade total"
           placeholderTextColor="#999"
           keyboardType="decimal-pad"
+          returnKeyType="next"
+          onSubmitEditing={() => notificationDaysRef.current?.focus()}
         />
 
         {/* Dias para Notificação */}
         <Text style={styles.label}>Notificar quantos dias antes de acabar</Text>
         <TextInput
+          ref={notificationDaysRef}
           style={styles.input}
           value={notificationDays}
           onChangeText={setNotificationDays}
           placeholder="Ex: 3"
           placeholderTextColor="#999"
           keyboardType="number-pad"
+          returnKeyType="done"
         />
+        <Text style={styles.helperText}>Você será avisado X dias antes de acabar</Text>
 
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={loading}
+          activeOpacity={0.7}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
@@ -313,7 +340,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: 50,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
@@ -369,6 +395,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#fff',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
+    marginLeft: 4,
   },
   pickerContainer: {
     borderWidth: 1,

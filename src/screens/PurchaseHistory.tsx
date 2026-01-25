@@ -6,8 +6,10 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllPurchases } from '../services/firestore';
 import { Purchase } from '../types';
@@ -18,8 +20,11 @@ interface PurchaseWithProduct extends Purchase {
 
 export default function PurchaseHistory({ navigation }: any) {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+
   const [purchases, setPurchases] = useState<PurchaseWithProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadPurchases();
@@ -42,7 +47,13 @@ export default function PurchaseHistory({ navigation }: any) {
       console.error('Erro ao carregar histórico:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadPurchases();
   };
 
   const formatDate = (date: Date) => {
@@ -61,12 +72,15 @@ export default function PurchaseHistory({ navigation }: any) {
     <TouchableOpacity
       style={styles.purchaseItem}
       onPress={() => navigation.navigate('ProductDetail', { productId: item.productId })}
+      activeOpacity={0.7}
     >
       <View style={styles.purchaseIcon}>
         <Ionicons name="cart" size={24} color="#4285F4" />
       </View>
       <View style={styles.purchaseInfo}>
-        <Text style={styles.productName}>{item.productName}</Text>
+        <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
+          {item.productName}
+        </Text>
         <Text style={styles.purchaseDate}>{formatDate(item.date)}</Text>
       </View>
       <View style={styles.purchaseQuantity}>
@@ -85,8 +99,8 @@ export default function PurchaseHistory({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.title}>Histórico de Compras</Text>
@@ -107,6 +121,9 @@ export default function PurchaseHistory({ navigation }: any) {
           renderItem={renderPurchase}
           keyExtractor={(item) => item.id || Math.random().toString()}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#4285F4']} />
+          }
         />
       )}
     </View>
@@ -128,7 +145,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-    paddingTop: 50,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',

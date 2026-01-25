@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ScrollView, KeyboardAvoidingView, Platform, TextInput as TextInputType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import Constants from 'expo-constants';
@@ -19,12 +20,16 @@ export default function Login() {
     webClientId: googleWebClientId,
   });
 
+  const insets = useSafeAreaInsets();
+  const passwordRef = useRef<TextInputType>(null);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [focusedInput, setFocusedInput] = useState<'email' | 'password' | null>(null);
 
   useEffect(() => {
     if (response?.type === 'success') {
@@ -118,10 +123,18 @@ export default function Login() {
         <Text style={styles.title}>FilhosApp</Text>
       <Text style={styles.subtitle}>{isRegistering ? 'Criar conta' : 'Bem-vindo!'}</Text>
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={18} color="#dc3545" />
+          <Text style={styles.error}>{error}</Text>
+        </View>
+      )}
 
       <TextInput
-        style={styles.input}
+        style={[
+          styles.input,
+          focusedInput === 'email' && styles.inputFocused
+        ]}
         placeholder="Email"
         placeholderTextColor="#999"
         value={email}
@@ -129,20 +142,33 @@ export default function Login() {
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
+        onFocus={() => setFocusedInput('email')}
+        onBlur={() => setFocusedInput(null)}
+        returnKeyType="next"
+        onSubmitEditing={() => passwordRef.current?.focus()}
       />
 
-      <View style={styles.passwordContainer}>
+      <View style={[
+        styles.passwordContainer,
+        focusedInput === 'password' && styles.inputFocused
+      ]}>
         <TextInput
+          ref={passwordRef}
           style={styles.passwordInput}
           placeholder="Senha"
           placeholderTextColor="#999"
           value={password}
           onChangeText={setPassword}
           secureTextEntry={!showPassword}
+          onFocus={() => setFocusedInput('password')}
+          onBlur={() => setFocusedInput(null)}
+          returnKeyType="done"
+          onSubmitEditing={handleEmailAuth}
         />
         <TouchableOpacity
           style={styles.eyeButton}
           onPress={() => setShowPassword(!showPassword)}
+          activeOpacity={0.7}
         >
           <Ionicons
             name={showPassword ? 'eye-off-outline' : 'eye-outline'}
@@ -156,6 +182,7 @@ export default function Login() {
         style={[styles.button, loading && styles.buttonDisabled]}
         onPress={handleEmailAuth}
         disabled={loading}
+        activeOpacity={0.7}
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -172,6 +199,7 @@ export default function Login() {
           setIsRegistering(!isRegistering);
           setError(null);
         }}
+        activeOpacity={0.7}
       >
         <Text style={styles.switchText}>
           {isRegistering ? 'Já tem conta? Entrar' : 'Não tem conta? Criar'}
@@ -188,7 +216,9 @@ export default function Login() {
         style={[styles.googleButton, (!request || loading) && styles.buttonDisabled]}
         onPress={handleGoogleLogin}
         disabled={!request || loading}
+        activeOpacity={0.7}
       >
+        <Ionicons name="logo-google" size={20} color="#DB4437" style={styles.googleIcon} />
         <Text style={styles.googleButtonText}>Entrar com Google</Text>
       </TouchableOpacity>
       </ScrollView>
@@ -230,6 +260,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#fff',
+  },
+  inputFocused: {
+    borderColor: '#4285F4',
+    borderWidth: 2,
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -306,15 +340,30 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 300,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  googleIcon: {
+    marginRight: 10,
   },
   googleButtonText: {
     color: '#333',
     fontSize: 16,
     fontWeight: '600',
   },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffebee',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 15,
+    width: '100%',
+    maxWidth: 300,
+  },
   error: {
     color: '#dc3545',
-    marginBottom: 15,
-    textAlign: 'center',
+    marginLeft: 8,
+    flex: 1,
   },
 });
