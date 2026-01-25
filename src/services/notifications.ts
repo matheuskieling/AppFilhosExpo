@@ -1,6 +1,5 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
@@ -54,19 +53,18 @@ export async function registerForPushNotifications(userId: string): Promise<stri
     });
   }
 
-  // Obtém o token FCM
+  // Obtém o token FCM (nativo do Firebase)
   try {
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    const token = (await Notifications.getDevicePushTokenAsync()).data;
 
-    console.log('Push token:', token);
+    console.log('FCM token:', token);
 
     // Salva o token no Firestore
     await saveFcmToken(userId, token);
 
     return token;
   } catch (error) {
-    console.error('Erro ao obter push token:', error);
+    console.error('Erro ao obter FCM token:', error);
     return null;
   }
 }

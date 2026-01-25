@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
@@ -108,10 +108,14 @@ export default function Login() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={styles.scrollContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <Text style={styles.title}>FilhosApp</Text>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>FilhosApp</Text>
       <Text style={styles.subtitle}>{isRegistering ? 'Criar conta' : 'Bem-vindo!'}</Text>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -119,6 +123,7 @@ export default function Login() {
       <TextInput
         style={styles.input}
         placeholder="Email"
+        placeholderTextColor="#999"
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
@@ -130,6 +135,7 @@ export default function Login() {
         <TextInput
           style={styles.passwordInput}
           placeholder="Senha"
+          placeholderTextColor="#999"
           value={password}
           onChangeText={setPassword}
           secureTextEntry={!showPassword}
@@ -185,14 +191,18 @@ export default function Login() {
       >
         <Text style={styles.googleButtonText}>Entrar com Google</Text>
       </TouchableOpacity>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContainer: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  container: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -218,6 +228,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     marginBottom: 15,
     fontSize: 16,
+    color: '#333',
+    backgroundColor: '#fff',
   },
   passwordContainer: {
     flexDirection: 'row',
@@ -229,12 +241,14 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 8,
     marginBottom: 15,
+    backgroundColor: '#fff',
   },
   passwordInput: {
     flex: 1,
     height: '100%',
     paddingHorizontal: 15,
     fontSize: 16,
+    color: '#333',
   },
   eyeButton: {
     paddingHorizontal: 15,

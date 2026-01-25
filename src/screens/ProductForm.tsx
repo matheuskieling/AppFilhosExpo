@@ -5,10 +5,12 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  ScrollView,
   Image,
   Alert,
   ActivityIndicator,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -186,7 +188,16 @@ export default function ProductForm({ navigation, route }: any) {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView
+        style={styles.form}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={styles.formContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Foto */}
         <TouchableOpacity style={styles.photoContainer} onPress={showImageOptions}>
           {photo ? (
@@ -206,6 +217,7 @@ export default function ProductForm({ navigation, route }: any) {
           value={name}
           onChangeText={setName}
           placeholder="Ex: Ração Golden"
+          placeholderTextColor="#999"
         />
 
         {/* Categoria */}
@@ -230,6 +242,7 @@ export default function ProductForm({ navigation, route }: any) {
           value={totalQuantity}
           onChangeText={setTotalQuantity}
           placeholder="Ex: 15 (kg por saco)"
+          placeholderTextColor="#999"
           keyboardType="decimal-pad"
         />
 
@@ -240,6 +253,7 @@ export default function ProductForm({ navigation, route }: any) {
           value={dailyUsage}
           onChangeText={setDailyUsage}
           placeholder="Ex: 0.5 (kg por dia)"
+          placeholderTextColor="#999"
           keyboardType="decimal-pad"
         />
 
@@ -250,6 +264,7 @@ export default function ProductForm({ navigation, route }: any) {
           value={remainingQuantity}
           onChangeText={setRemainingQuantity}
           placeholder="Deixe vazio para usar quantidade total"
+          placeholderTextColor="#999"
           keyboardType="decimal-pad"
         />
 
@@ -260,6 +275,7 @@ export default function ProductForm({ navigation, route }: any) {
           value={notificationDays}
           onChangeText={setNotificationDays}
           placeholder="Ex: 3"
+          placeholderTextColor="#999"
           keyboardType="number-pad"
         />
 
@@ -276,9 +292,8 @@ export default function ProductForm({ navigation, route }: any) {
             </Text>
           )}
         </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -309,7 +324,10 @@ const styles = StyleSheet.create({
   },
   form: {
     flex: 1,
+  },
+  formContent: {
     padding: 20,
+    paddingBottom: 20,
   },
   photoContainer: {
     alignSelf: 'center',
@@ -349,15 +367,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    color: '#333',
+    backgroundColor: '#fff',
   },
   pickerContainer: {
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
     overflow: 'hidden',
+    backgroundColor: '#fff',
   },
   picker: {
     height: 50,
+    color: '#333',
   },
   saveButton: {
     backgroundColor: '#4285F4',

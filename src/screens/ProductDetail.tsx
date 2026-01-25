@@ -10,10 +10,12 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { getProduct, getPurchases, addPurchase, deletePurchase, deleteProduct, getCategories } from '../services/firestore';
+import { getProduct, getPurchases, addPurchase, deletePurchase, deleteProduct, getCategories, updateProduct } from '../services/firestore';
 import { Product, Purchase, Category } from '../types';
 
 export default function ProductDetail({ navigation, route }: any) {
@@ -27,6 +29,9 @@ export default function ProductDetail({ navigation, route }: any) {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [purchaseQuantity, setPurchaseQuantity] = useState('1');
   const [savingPurchase, setSavingPurchase] = useState(false);
+  const [showCalibrateModal, setShowCalibrateModal] = useState(false);
+  const [calibrateQuantity, setCalibrateQuantity] = useState('1');
+  const [savingCalibrate, setSavingCalibrate] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -85,6 +90,31 @@ export default function ProductDetail({ navigation, route }: any) {
       Alert.alert('Erro', 'Não foi possível registrar a compra');
     } finally {
       setSavingPurchase(false);
+    }
+  };
+
+  const handleCalibrate = async () => {
+    if (!user || !product) return;
+
+    const qty = parseFloat(calibrateQuantity);
+    if (isNaN(qty) || qty < 0) {
+      Alert.alert('Erro', 'Informe uma quantidade válida');
+      return;
+    }
+
+    setSavingCalibrate(true);
+    try {
+      const newRemaining = qty * product.totalQuantity;
+      await updateProduct(user.uid, productId, { remainingQuantity: newRemaining });
+      setShowCalibrateModal(false);
+      setCalibrateQuantity('1');
+      loadData();
+      Alert.alert('Sucesso', `Estoque calibrado para ${Math.round(newRemaining)} unidades`);
+    } catch (error) {
+      console.error('Erro ao calibrar:', error);
+      Alert.alert('Erro', 'Não foi possível calibrar o estoque');
+    } finally {
+      setSavingCalibrate(false);
     }
   };
 
@@ -238,14 +268,24 @@ export default function ProductDetail({ navigation, route }: any) {
           <Text style={styles.infoValue}>{product.notificationDays} dias antes</Text>
         </View>
 
-        {/* Botão Adicionar Compra */}
-        <TouchableOpacity
-          style={styles.purchaseButton}
-          onPress={() => setShowPurchaseModal(true)}
-        >
-          <Ionicons name="cart-outline" size={20} color="#fff" />
-          <Text style={styles.purchaseButtonText}>Registrar Compra</Text>
-        </TouchableOpacity>
+        {/* Botões de Ação */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={styles.purchaseButton}
+            onPress={() => setShowPurchaseModal(true)}
+          >
+            <Ionicons name="cart-outline" size={20} color="#fff" />
+            <Text style={styles.purchaseButtonText}>Compra</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.calibrateButton}
+            onPress={() => setShowCalibrateModal(true)}
+          >
+            <Ionicons name="sync-outline" size={20} color="#fff" />
+            <Text style={styles.calibrateButtonText}>Calibrar</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Histórico de Compras */}
         <Text style={styles.sectionTitle}>Histórico de Compras</Text>
@@ -289,7 +329,10 @@ export default function ProductDetail({ navigation, route }: any) {
         animationType="fade"
         onRequestClose={() => setShowPurchaseModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Registrar Compra</Text>
             <Text style={styles.modalLabel}>Quantas unidades você comprou?</Text>
@@ -299,6 +342,7 @@ export default function ProductDetail({ navigation, route }: any) {
               onChangeText={setPurchaseQuantity}
               keyboardType="number-pad"
               placeholder="1"
+              placeholderTextColor="#999"
             />
             <Text style={styles.modalInfo}>
               Cada unidade tem {product.totalQuantity} de quantidade total
@@ -323,7 +367,55 @@ export default function ProductDetail({ navigation, route }: any) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal de Calibração */}
+      <Modal
+        visible={showCalibrateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCalibrateModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Calibrar Estoque</Text>
+            <Text style={styles.modalLabel}>Quantas unidades você tem em estoque?</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={calibrateQuantity}
+              onChangeText={setCalibrateQuantity}
+              keyboardType="decimal-pad"
+              placeholder="1"
+              placeholderTextColor="#999"
+            />
+            <Text style={styles.modalInfo}>
+              Resultado: {Math.round(parseFloat(calibrateQuantity || '0') * (product?.totalQuantity || 0))} de quantidade restante
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowCalibrateModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirmButton, styles.calibrateConfirmButton, savingCalibrate && styles.modalButtonDisabled]}
+                onPress={handleCalibrate}
+                disabled={savingCalibrate}
+              >
+                {savingCalibrate ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Calibrar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -431,21 +523,44 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 25,
+  },
   purchaseButton: {
+    flex: 1,
     flexDirection: 'row',
     backgroundColor: '#28a745',
     borderRadius: 8,
     padding: 15,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 25,
   },
   purchaseButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  calibrateButton: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#4285F4',
+    borderRadius: 8,
+    padding: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calibrateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  calibrateConfirmButton: {
+    backgroundColor: '#4285F4',
   },
   sectionTitle: {
     fontSize: 18,
@@ -531,6 +646,8 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 18,
     textAlign: 'center',
+    color: '#333',
+    backgroundColor: '#fff',
   },
   modalInfo: {
     fontSize: 12,

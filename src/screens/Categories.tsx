@@ -9,6 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -158,7 +160,10 @@ export default function Categories({ navigation }: any) {
         animationType="fade"
         onRequestClose={() => setShowModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
               {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
@@ -168,6 +173,7 @@ export default function Categories({ navigation }: any) {
               value={categoryName}
               onChangeText={setCategoryName}
               placeholder="Nome da categoria"
+              placeholderTextColor="#999"
               autoFocus
             />
             <View style={styles.modalButtons}>
@@ -190,7 +196,7 @@ export default function Categories({ navigation }: any) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -282,6 +288,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    color: '#333',
+    backgroundColor: '#fff',
   },
   modalButtons: {
     flexDirection: 'row',
