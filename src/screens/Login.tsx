@@ -1,26 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, ScrollView, KeyboardAvoidingView, Platform, TextInput as TextInputType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import Constants from 'expo-constants';
-import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
 
-WebBrowser.maybeCompleteAuthSession();
-
-// Get Google OAuth client IDs from app config (set via EAS secrets or local env)
-const googleWebClientId = Constants.expoConfig?.extra?.googleWebClientId;
-const googleAndroidClientId = Constants.expoConfig?.extra?.googleAndroidClientId;
-
 export default function Login() {
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: googleAndroidClientId,
-    webClientId: googleWebClientId,
-  });
-
-  const insets = useSafeAreaInsets();
   const passwordRef = useRef<TextInputType>(null);
 
   const [email, setEmail] = useState('');
@@ -30,38 +14,6 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [focusedInput, setFocusedInput] = useState<'email' | 'password' | null>(null);
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      handleGoogleSignIn(id_token);
-    } else if (response?.type === 'error' || response?.type === 'dismiss') {
-      if (response?.type === 'error') {
-        setError('Erro ao fazer login com Google');
-      }
-      setLoading(false);
-    }
-  }, [response]);
-
-  const handleGoogleSignIn = async (idToken: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const credential = GoogleAuthProvider.credential(idToken);
-      await signInWithCredential(auth, credential);
-    } catch (err) {
-      console.error('Erro no login:', err);
-      setError('Falha ao autenticar. Tente novamente.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError(null);
-    await promptAsync();
-  };
 
   const handleEmailAuth = async () => {
     if (!email || !password) {
@@ -205,22 +157,6 @@ export default function Login() {
           {isRegistering ? 'Já tem conta? Entrar' : 'Não tem conta? Criar'}
         </Text>
       </TouchableOpacity>
-
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>ou</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
-      <TouchableOpacity
-        style={[styles.googleButton, (!request || loading) && styles.buttonDisabled]}
-        onPress={handleGoogleLogin}
-        disabled={!request || loading}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="logo-google" size={20} color="#DB4437" style={styles.googleIcon} />
-        <Text style={styles.googleButtonText}>Entrar com Google</Text>
-      </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -312,44 +248,6 @@ const styles = StyleSheet.create({
   switchText: {
     color: '#4285F4',
     fontSize: 14,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 300,
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#ddd',
-  },
-  dividerText: {
-    color: '#666',
-    paddingHorizontal: 10,
-    fontSize: 14,
-  },
-  googleButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 8,
-    width: '100%',
-    maxWidth: 300,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  googleIcon: {
-    marginRight: 10,
-  },
-  googleButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: '600',
   },
   errorContainer: {
     flexDirection: 'row',
