@@ -31,10 +31,10 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # secrets (credenciais sensíveis)
-src/config/secrets.ts
 google-services.json
 
 # IDE

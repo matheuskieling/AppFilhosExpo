@@ -2,6 +2,7 @@ import {setGlobalOptions} from "firebase-functions";
 import {onSchedule} from "firebase-functions/scheduler";
 import {getFirestore, FieldValue} from "firebase-admin/firestore";
 import {getMessaging} from "firebase-admin/messaging";
+import {getAuth} from "firebase-admin/auth";
 import {initializeApp} from "firebase-admin/app";
 import * as logger from "firebase-functions/logger";
 
@@ -22,25 +23,24 @@ const db = getFirestore();
  */
 
 /**
- * Função agendada que roda todo dia às 00:00 (horário de Brasília)
+ * Função agendada que roda todo dia às 08:00 (horário de Brasília)
  * - Desconta a quantidade usada por dia de cada produto
  * - Verifica se precisa enviar notificação
  */
 export const dailyStockUpdate = onSchedule(
   {
-    schedule: "*/10 * * * *", // A cada 10 minutos (TESTE)
+    schedule: "0 8 * * *", // Todo dia às 8h BRT
     timeZone: "America/Sao_Paulo",
   },
   async () => {
     logger.info("Iniciando atualização diária de estoque");
 
     try {
-      // Busca todos os usuários
-      const usersSnapshot = await db.collection("users").get();
+      // Busca todos os usuários do Firebase Auth
+      const listUsersResult = await getAuth().listUsers();
 
-      for (const userDoc of usersSnapshot.docs) {
-        const userId = userDoc.id;
-        await processUserProducts(userId);
+      for (const userRecord of listUsersResult.users) {
+        await processUserProducts(userRecord.uid);
       }
 
       logger.info("Atualização diária concluída");

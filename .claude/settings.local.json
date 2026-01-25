@@ -14,7 +14,10 @@
       "Bash(del:*)",
       "WebFetch(domain:job-logs.eascdn.net)",
       "Bash(npx expo:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(firebase functions:log:*)",
+      "Bash(npx expo-doctor:*)",
+      "Bash(node -e:*)"
     ]
   }
 }

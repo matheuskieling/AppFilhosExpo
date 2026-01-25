@@ -11,6 +11,7 @@
     "preview": {
       "distribution": "internal",
       "android": {
+        "buildType": "apk",
         "env": {
           "GOOGLE_SERVICES_JSON": "@GOOGLE_SERVICES_JSON",
           "GOOGLE_WEB_CLIENT_ID": "@GOOGLE_WEB_CLIENT_ID",
