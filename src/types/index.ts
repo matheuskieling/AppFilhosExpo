@@ -13,11 +13,18 @@ export interface Product {
   updatedAt?: Date;
 }
 
+export enum PurchaseStatus {
+  PENDING = 'pending',
+  DELIVERED = 'delivered',
+}
+
 export interface Purchase {
   id?: string;
   productId: string;
   quantity: number; // quantas unidades comprou
   date: Date;
+  status: PurchaseStatus; // 'pending' = compra realizada, 'delivered' = entregue
+  deliveredAt?: Date; // data que foi marcada como entregue
 }
 
 export interface Category {

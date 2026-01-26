@@ -84,15 +84,6 @@ export default function MoreMenu({ navigation }: any) {
                 navigation.navigate('Categories');
               }}
             />
-            <View style={styles.divider} />
-            <MenuItem
-              icon="receipt-outline"
-              label="Histórico de Compras"
-              onPress={() => {
-                haptics.light();
-                navigation.navigate('PurchaseHistory');
-              }}
-            />
           </View>
         </View>
 
