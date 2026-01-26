@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllPurchases } from '../services/firestore';
-import { Purchase } from '../types';
+import { getAllPurchases, markPurchaseAsDelivered, getProduct } from '../services/firestore';
+import { Purchase, PurchaseStatus } from '../types';
 
 interface PurchaseWithProduct extends Purchase {
   productName: string;
@@ -42,7 +44,13 @@ export default function PurchaseHistory({ navigation }: any) {
 
     try {
       const data = await getAllPurchases(user.uid);
-      setPurchases(data);
+      // Ordenar: pendentes primeiro, depois por data (mais recente primeiro)
+      const sorted = data.sort((a, b) => {
+        if (a.status === PurchaseStatus.PENDING && b.status !== PurchaseStatus.PENDING) return -1;
+        if (a.status !== PurchaseStatus.PENDING && b.status === PurchaseStatus.PENDING) return 1;
+        return b.date.getTime() - a.date.getTime();
+      });
+      setPurchases(sorted);
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
     } finally {
@@ -68,26 +76,94 @@ export default function PurchaseHistory({ navigation }: any) {
     return date.toLocaleDateString('pt-BR');
   };
 
-  const renderPurchase = ({ item }: { item: PurchaseWithProduct }) => (
-    <TouchableOpacity
-      style={styles.purchaseItem}
-      onPress={() => navigation.navigate('ProductDetail', { productId: item.productId })}
-      activeOpacity={0.7}
-    >
-      <View style={styles.purchaseIcon}>
-        <Ionicons name="cart" size={24} color="#4285F4" />
-      </View>
-      <View style={styles.purchaseInfo}>
-        <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
-          {item.productName}
-        </Text>
-        <Text style={styles.purchaseDate}>{formatDate(item.date)}</Text>
-      </View>
-      <View style={styles.purchaseQuantity}>
-        <Text style={styles.quantityText}>x{item.quantity}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const handleMarkAsDelivered = async (purchase: PurchaseWithProduct) => {
+    if (!user || !purchase.id) return;
+
+    // Busca o produto para pegar a quantidade total por unidade
+    const product = await getProduct(user.uid, purchase.productId);
+    if (!product) {
+      Alert.alert('Erro', 'Produto não encontrado');
+      return;
+    }
+
+    Alert.alert(
+      'Confirmar Entrega',
+      `Confirmar entrega de ${purchase.quantity} unidade(s) de ${purchase.productName}?\n\nSerão adicionados ${Math.round(purchase.quantity * product.totalQuantity)} ao estoque.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Confirmar',
+          onPress: async () => {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await markPurchaseAsDelivered(
+                user.uid,
+                purchase.productId,
+                purchase.id!,
+                purchase.quantity,
+                product.totalQuantity
+              );
+              loadPurchases();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Sucesso', 'Entrega confirmada! Estoque atualizado.');
+            } catch (error) {
+              console.error('Erro ao marcar como entregue:', error);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert('Erro', 'Não foi possível confirmar a entrega');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderPurchase = ({ item }: { item: PurchaseWithProduct }) => {
+    const isPending = item.status === PurchaseStatus.PENDING;
+
+    return (
+      <TouchableOpacity
+        style={[styles.purchaseItem, isPending && styles.purchaseItemPending]}
+        onPress={() => navigation.navigate('ProductDetail', { productId: item.productId })}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.purchaseIcon, isPending && styles.purchaseIconPending]}>
+          <Ionicons name={isPending ? 'time' : 'cart'} size={24} color={isPending ? '#d97706' : '#4285F4'} />
+        </View>
+        <View style={styles.purchaseInfo}>
+          <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
+            {item.productName}
+          </Text>
+          <View style={styles.purchaseMeta}>
+            <Text style={styles.purchaseDate}>{formatDate(item.date)}</Text>
+            {isPending ? (
+              <View style={styles.statusBadgePending}>
+                <Ionicons name="time-outline" size={10} color="#d97706" />
+                <Text style={styles.statusBadgeTextPending}>Aguardando Entrega</Text>
+              </View>
+            ) : (
+              <View style={styles.statusBadgeDelivered}>
+                <Text style={styles.statusBadgeTextDelivered}>Entregue</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        {isPending ? (
+          <TouchableOpacity
+            style={styles.deliveredButton}
+            onPress={() => handleMarkAsDelivered(item)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="checkmark-circle" size={16} color="#fff" />
+            <Text style={styles.deliveredButtonText}>Entregue</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.purchaseQuantity}>
+            <Text style={styles.quantityText}>x{item.quantity}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -97,13 +173,24 @@ export default function PurchaseHistory({ navigation }: any) {
     );
   }
 
+  const pendingCount = purchases.filter(p => p.status === PurchaseStatus.PENDING).length;
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.title}>Histórico de Compras</Text>
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>Histórico de Compras</Text>
+          {pendingCount > 0 && (
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>
+                {pendingCount} pendente{pendingCount > 1 ? 's' : ''}
+              </Text>
+            </View>
+          )}
+        </View>
         <View style={{ width: 24 }} />
       </View>
 
@@ -149,10 +236,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
+  titleContainer: {
+    alignItems: 'center',
+  },
   title: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+  },
+  pendingBadge: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  pendingBadgeText: {
+    fontSize: 11,
+    color: '#d97706',
+    fontWeight: '500',
   },
   listContent: {
     padding: 15,
@@ -165,6 +267,11 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 10,
   },
+  purchaseItemPending: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
   purchaseIcon: {
     width: 44,
     height: 44,
@@ -173,9 +280,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  purchaseIconPending: {
+    backgroundColor: '#fef3c7',
+  },
   purchaseInfo: {
     flex: 1,
     marginLeft: 15,
+  },
+  purchaseMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
   },
   productName: {
     fontSize: 16,
@@ -185,7 +301,31 @@ const styles = StyleSheet.create({
   purchaseDate: {
     fontSize: 12,
     color: '#666',
-    marginTop: 2,
+  },
+  statusBadgePending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
+  },
+  statusBadgeTextPending: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#d97706',
+  },
+  statusBadgeDelivered: {
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statusBadgeTextDelivered: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#059669',
   },
   purchaseQuantity: {
     backgroundColor: '#28a745',
@@ -196,6 +336,20 @@ const styles = StyleSheet.create({
   quantityText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  deliveredButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#28a745',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 4,
+  },
+  deliveredButtonText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: '600',
   },
   emptyContainer: {

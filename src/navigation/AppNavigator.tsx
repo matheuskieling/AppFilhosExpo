@@ -39,6 +39,9 @@ function MainTabs() {
             case 'Produtos':
               iconName = focused ? 'cube' : 'cube-outline';
               break;
+            case 'Historico':
+              iconName = focused ? 'receipt' : 'receipt-outline';
+              break;
             case 'Mais':
               iconName = focused ? 'ellipsis-horizontal' : 'ellipsis-horizontal-outline';
               break;
@@ -75,6 +78,11 @@ function MainTabs() {
         options={{ tabBarLabel: 'Produtos' }}
       />
       <Tab.Screen
+        name="Historico"
+        component={PurchaseHistory}
+        options={{ tabBarLabel: 'Historico' }}
+      />
+      <Tab.Screen
         name="Mais"
         component={MoreMenu}
         options={{ tabBarLabel: 'Mais' }}
@@ -103,7 +111,6 @@ export default function AppNavigator() {
             <Stack.Screen name="ProductForm" component={ProductForm} />
             <Stack.Screen name="ProductDetail" component={ProductDetail} />
             <Stack.Screen name="Categories" component={Categories} />
-            <Stack.Screen name="PurchaseHistory" component={PurchaseHistory} />
           </>
         ) : (
           <Stack.Screen name="Login" component={Login} />

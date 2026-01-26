@@ -20,8 +20,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuth } from '../contexts/AuthContext';
-import { getProduct, getPurchases, addPurchase, deletePurchase, deleteProduct, getCategories, updateProduct } from '../services/firestore';
-import { Product, Purchase, Category } from '../types';
+import { getProduct, getPurchases, addPurchase, deletePurchase, deleteProduct, getCategories, updateProduct, markPurchaseAsDelivered } from '../services/firestore';
+import { Product, Purchase, Category, PurchaseStatus } from '../types';
 
 export default function ProductDetail({ navigation, route }: any) {
   const { user } = useAuth();
@@ -116,7 +116,7 @@ export default function ProductDetail({ navigation, route }: any) {
       setPurchaseQuantity('1');
       loadData();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Sucesso', `Compra de ${qty} unidade(s) registrada!`);
+      Alert.alert('Compra Registrada', `Compra de ${qty} unidade(s) registrada!\n\nQuando receber, marque como "Entregue" para atualizar o estoque.`);
     } catch (error) {
       console.error('Erro ao adicionar compra:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -181,9 +181,13 @@ export default function ProductDetail({ navigation, route }: any) {
   const handleDeletePurchase = (purchase: Purchase) => {
     if (!product) return;
 
+    const message = purchase.status === PurchaseStatus.DELIVERED
+      ? `Excluir compra de ${purchase.quantity} unidade(s)? O estoque será reduzido.`
+      : `Excluir compra de ${purchase.quantity} unidade(s)? Como ainda não foi entregue, o estoque não será alterado.`;
+
     Alert.alert(
       'Excluir compra',
-      `Excluir compra de ${purchase.quantity} unidade(s)? O estoque será reduzido.`,
+      message,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -197,12 +201,49 @@ export default function ProductDetail({ navigation, route }: any) {
                 productId,
                 purchase.id,
                 purchase.quantity,
-                product.totalQuantity
+                product.totalQuantity,
+                purchase.status
               );
               loadData();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             } catch (error) {
               console.error('Erro ao excluir compra:', error);
               Alert.alert('Erro', 'Não foi possível excluir a compra');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMarkAsDelivered = (purchase: Purchase) => {
+    if (!product || !purchase.id) return;
+
+    Alert.alert(
+      'Confirmar Entrega',
+      `Confirmar entrega de ${purchase.quantity} unidade(s)?\n\nSerão adicionados ${Math.round(purchase.quantity * product.totalQuantity)} ao estoque.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Confirmar',
+          onPress: async () => {
+            if (!user) return;
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await markPurchaseAsDelivered(
+                user.uid,
+                productId,
+                purchase.id!,
+                purchase.quantity,
+                product.totalQuantity
+              );
+              loadData();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Sucesso', 'Entrega confirmada! Estoque atualizado.');
+            } catch (error) {
+              console.error('Erro ao marcar como entregue:', error);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert('Erro', 'Não foi possível confirmar a entrega');
             }
           },
         },
@@ -354,37 +395,60 @@ export default function ProductDetail({ navigation, route }: any) {
         {purchases.length === 0 ? (
           <Text style={styles.emptyText}>Nenhuma compra registrada</Text>
         ) : (
-          purchases.map((purchase) => (
-            <Swipeable
-              key={purchase.id}
-              ref={(ref) => {
-                if (ref && purchase.id) {
-                  swipeableRefs.current.set(purchase.id, ref);
-                }
-              }}
-              renderRightActions={() => renderRightActions(purchase)}
-              overshootRight={false}
-            >
-              <View style={styles.purchaseItem}>
-                <View style={styles.purchaseInfo}>
-                  <Text style={styles.purchaseQuantity}>{purchase.quantity} unidade(s)</Text>
-                  <Text style={styles.purchaseDate}>
-                    {purchase.date.toLocaleDateString('pt-BR')}
-                  </Text>
+          purchases.map((purchase) => {
+            const isPending = purchase.status === PurchaseStatus.PENDING;
+            return (
+              <Swipeable
+                key={purchase.id}
+                ref={(ref) => {
+                  if (ref && purchase.id) {
+                    swipeableRefs.current.set(purchase.id, ref);
+                  }
+                }}
+                renderRightActions={() => renderRightActions(purchase)}
+                overshootRight={false}
+              >
+                <View style={[styles.purchaseItem, isPending && styles.purchaseItemPending]}>
+                  <View style={styles.purchaseInfo}>
+                    <View style={styles.purchaseHeader}>
+                      <Text style={styles.purchaseQuantity}>{purchase.quantity} unidade(s)</Text>
+                      {isPending ? (
+                        <View style={styles.statusBadgePending}>
+                          <Ionicons name="time-outline" size={10} color="#d97706" />
+                          <Text style={styles.statusBadgeTextPending}>Aguardando Entrega</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.statusBadgeDelivered}>
+                          <Text style={styles.statusBadgeTextDelivered}>Entregue</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.purchaseDate}>
+                      {purchase.date.toLocaleDateString('pt-BR')}
+                    </Text>
+                  </View>
+                  {isPending ? (
+                    <TouchableOpacity
+                      style={styles.deliveredButton}
+                      onPress={() => handleMarkAsDelivered(purchase)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      <Text style={styles.deliveredButtonText}>Entregue</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.purchaseDeleteButton}
+                      onPress={() => handleDeletePurchase(purchase)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#dc3545" />
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <Text style={styles.purchaseTotal}>
-                  +{Math.round(purchase.quantity * product.totalQuantity)}
-                </Text>
-                <TouchableOpacity
-                  style={styles.purchaseDeleteButton}
-                  onPress={() => handleDeletePurchase(purchase)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#dc3545" />
-                </TouchableOpacity>
-              </View>
-            </Swipeable>
-          ))
+              </Swipeable>
+            );
+          })
         )}
 
         {/* Botão Excluir */}
@@ -421,7 +485,8 @@ export default function ProductDetail({ navigation, route }: any) {
               returnKeyType="done"
             />
             <Text style={styles.modalInfo}>
-              Cada unidade tem {product.totalQuantity} de quantidade total
+              Cada unidade tem {product.totalQuantity} de quantidade total.{'\n'}
+              O estoque será atualizado quando você marcar como entregue.
             </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -662,8 +727,43 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 10,
   },
+  purchaseItemPending: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
   purchaseInfo: {
     flex: 1,
+  },
+  purchaseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusBadgePending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
+  },
+  statusBadgeTextPending: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#d97706',
+  },
+  statusBadgeDelivered: {
+    backgroundColor: '#d1fae5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statusBadgeTextDelivered: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#059669',
   },
   purchaseDeleteButton: {
     minWidth: 44,
@@ -671,6 +771,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,
+  },
+  deliveredButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#28a745',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginLeft: 10,
+    gap: 4,
+  },
+  deliveredButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   purchaseQuantity: {
     fontSize: 14,
@@ -681,11 +796,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 2,
-  },
-  purchaseTotal: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#28a745',
   },
   swipeDeleteButton: {
     backgroundColor: '#dc3545',

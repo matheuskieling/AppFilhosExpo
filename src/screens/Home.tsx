@@ -168,6 +168,10 @@ export default function Home({ navigation }: any) {
       haptics.success();
       setPurchaseModalVisible(false);
       loadData();
+      Alert.alert(
+        'Compra Registrada',
+        `Compra de ${qty} unidade(s) registrada!\n\nQuando receber, marque como "Entregue" para atualizar o estoque.`
+      );
     } catch (error) {
       haptics.error();
       Alert.alert('Erro', 'Não foi possível registrar a compra');
@@ -462,7 +466,14 @@ export default function Home({ navigation }: any) {
                     Estoque atual: {Math.round(selectedProduct.remainingQuantity)}
                   </Text>
                   <Text style={styles.summaryText}>
-                    Após compra: {Math.round(selectedProduct.remainingQuantity + (parseInt(purchaseQuantity) || 0) * selectedProduct.totalQuantity)}
+                    Após entrega: +{Math.round((parseInt(purchaseQuantity) || 0) * selectedProduct.totalQuantity)}
+                  </Text>
+                </View>
+
+                <View style={styles.deliveryNotice}>
+                  <Ionicons name="information-circle" size={18} color="#d97706" />
+                  <Text style={styles.deliveryNoticeText}>
+                    O estoque será atualizado quando você marcar como entregue.
                   </Text>
                 </View>
 
@@ -820,12 +831,26 @@ const styles = StyleSheet.create({
     padding: 15,
     backgroundColor: '#e8f0fe',
     borderRadius: 8,
-    marginBottom: 20,
+    marginBottom: 12,
   },
   summaryText: {
     fontSize: 14,
     color: '#333',
     marginBottom: 4,
+  },
+  deliveryNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+    gap: 8,
+  },
+  deliveryNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#92400e',
   },
   confirmButton: {
     backgroundColor: '#28a745',

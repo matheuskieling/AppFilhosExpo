@@ -3,6 +3,7 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 export type TabParamList = {
   Home: undefined;
   Produtos: undefined;
+  Historico: undefined;
   Mais: undefined;
 };
 
@@ -12,7 +13,6 @@ export type RootStackParamList = {
   ProductForm: { productId?: string } | undefined;
   ProductDetail: { productId: string };
   Categories: undefined;
-  PurchaseHistory: undefined;
 };
 
 // Legacy support

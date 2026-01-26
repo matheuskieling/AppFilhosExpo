@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import app from '../config/firebase';
-import { Product, Category, Purchase } from '../types';
+import { Product, Category, Purchase, PurchaseStatus } from '../types';
 
 const db = getFirestore(app);
 
@@ -119,6 +119,8 @@ export const getPurchases = async (userId: string, productId: string): Promise<P
     productId,
     ...doc.data(),
     date: convertTimestamp(doc.data().date) || new Date(),
+    status: doc.data().status || PurchaseStatus.DELIVERED, // retrocompatibilidade: compras antigas são consideradas entregues
+    deliveredAt: convertTimestamp(doc.data().deliveredAt),
   })) as Purchase[];
 };
 
@@ -126,19 +128,36 @@ export const addPurchase = async (
   userId: string,
   productId: string,
   quantity: number,
-  totalQuantityPerUnit: number
+  _totalQuantityPerUnit: number // mantido para compatibilidade, não usado mais aqui
 ): Promise<void> => {
-  // Adiciona registro de compra
+  // Adiciona registro de compra com status pendente (aguardando entrega)
   const purchasesRef = collection(db, `users/${userId}/products/${productId}/purchases`);
   await addDoc(purchasesRef, {
     quantity,
     date: serverTimestamp(),
+    status: PurchaseStatus.PENDING,
+  });
+  // Não atualiza a quantidade do produto - isso só acontece quando a compra for marcada como entregue
+};
+
+export const markPurchaseAsDelivered = async (
+  userId: string,
+  productId: string,
+  purchaseId: string,
+  purchaseQuantity: number,
+  totalQuantityPerUnit: number
+): Promise<void> => {
+  // Atualiza o status da compra para entregue
+  const purchaseRef = doc(db, `users/${userId}/products/${productId}/purchases/${purchaseId}`);
+  await updateDoc(purchaseRef, {
+    status: PurchaseStatus.DELIVERED,
+    deliveredAt: serverTimestamp(),
   });
 
-  // Atualiza quantidade restante do produto
+  // Agora sim adiciona a quantidade ao estoque do produto
   const product = await getProduct(userId, productId);
   if (product) {
-    const newRemaining = product.remainingQuantity + (quantity * totalQuantityPerUnit);
+    const newRemaining = product.remainingQuantity + (purchaseQuantity * totalQuantityPerUnit);
     await updateProduct(userId, productId, { remainingQuantity: newRemaining });
   }
 };
@@ -148,17 +167,20 @@ export const deletePurchase = async (
   productId: string,
   purchaseId: string,
   purchaseQuantity: number,
-  totalQuantityPerUnit: number
+  totalQuantityPerUnit: number,
+  purchaseStatus: PurchaseStatus = PurchaseStatus.DELIVERED // retrocompatibilidade
 ): Promise<void> => {
   // Remove o registro de compra
   const purchaseRef = doc(db, `users/${userId}/products/${productId}/purchases/${purchaseId}`);
   await deleteDoc(purchaseRef);
 
-  // Subtrai a quantidade do estoque
-  const product = await getProduct(userId, productId);
-  if (product) {
-    const newRemaining = Math.max(0, product.remainingQuantity - (purchaseQuantity * totalQuantityPerUnit));
-    await updateProduct(userId, productId, { remainingQuantity: newRemaining });
+  // Só subtrai a quantidade do estoque se a compra já estava entregue
+  if (purchaseStatus === PurchaseStatus.DELIVERED) {
+    const product = await getProduct(userId, productId);
+    if (product) {
+      const newRemaining = Math.max(0, product.remainingQuantity - (purchaseQuantity * totalQuantityPerUnit));
+      await updateProduct(userId, productId, { remainingQuantity: newRemaining });
+    }
   }
 };
 
