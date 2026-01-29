@@ -266,8 +266,10 @@ export default function ProductsList({ navigation }: any) {
       <TouchableOpacity
         style={[
           styles.productCard,
-          isUrgent && styles.productCardUrgent,
-          needsAttention && styles.productCardAttention,
+          item.isSuspended ? styles.productCardSuspended : (
+            isUrgent ? styles.productCardUrgent :
+            needsAttention ? styles.productCardAttention : null
+          ),
         ]}
         onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
         activeOpacity={0.7}
@@ -281,18 +283,29 @@ export default function ProductsList({ navigation }: any) {
         )}
 
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
-            {item.name}
-          </Text>
-          {isUrgent && (
+          <View style={styles.productNameRow}>
+            <Text style={styles.productName} numberOfLines={1} ellipsizeMode="tail">
+              {item.name}
+            </Text>
+            {item.isSuspended && (
+              <View style={styles.suspendedBadge}>
+                <Ionicons name="pause-circle" size={12} color="#f97316" />
+                <Text style={styles.suspendedBadgeText}>Suspenso</Text>
+              </View>
+            )}
+          </View>
+          {isUrgent && !item.isSuspended && (
             <Text style={[styles.urgentLabel, { color: '#dc3545' }]}>ACABOU!</Text>
           )}
-          {needsAttention && (
+          {needsAttention && !item.isSuspended && (
             <Text style={[styles.urgentLabel, { color: '#b8860b' }]}>
               Comprar em {item.daysUntilEmpty} dias
             </Text>
           )}
-          {item.categoryName && !isUrgent && !needsAttention && (
+          {item.isSuspended && (
+            <Text style={styles.suspendedLabel}>Uso pausado</Text>
+          )}
+          {item.categoryName && !isUrgent && !needsAttention && !item.isSuspended && (
             <Text style={styles.productCategory} numberOfLines={1} ellipsizeMode="tail">
               {item.categoryName}
             </Text>
@@ -304,22 +317,28 @@ export default function ProductsList({ navigation }: any) {
             <View
               style={[
                 styles.progressBar,
-                { width: `${progressPercent * 100}%`, backgroundColor: statusColor }
+                { width: `${progressPercent * 100}%`, backgroundColor: item.isSuspended ? '#9ca3af' : statusColor }
               ]}
             />
           </View>
         </View>
 
         <View style={styles.statusContainer}>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>
-              {item.daysUntilEmpty === Infinity
-                ? '∞'
-                : item.daysUntilEmpty <= 0
-                  ? '!'
-                  : `${item.daysUntilEmpty}d`}
-            </Text>
-          </View>
+          {item.isSuspended ? (
+            <View style={[styles.statusBadge, { backgroundColor: '#f97316' }]}>
+              <Ionicons name="pause" size={14} color="#fff" />
+            </View>
+          ) : (
+            <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+              <Text style={styles.statusText}>
+                {item.daysUntilEmpty === Infinity
+                  ? '∞'
+                  : item.daysUntilEmpty <= 0
+                    ? '!'
+                    : `${item.daysUntilEmpty}d`}
+              </Text>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -623,6 +642,12 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#b8860b',
   },
+  productCardSuspended: {
+    backgroundColor: '#f9fafb',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f97316',
+    opacity: 0.85,
+  },
   productImage: {
     width: 60,
     height: 60,
@@ -637,10 +662,35 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 15,
   },
+  productNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   productName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+    flexShrink: 1,
+  },
+  suspendedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 3,
+  },
+  suspendedBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#f97316',
+  },
+  suspendedLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 2,
   },
   urgentLabel: {
     fontSize: 12,

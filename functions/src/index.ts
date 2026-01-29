@@ -62,6 +62,12 @@ async function processUserProducts(userId: string): Promise<void> {
     const product = productDoc.data();
     const productId = productDoc.id;
 
+    // Pula produtos suspensos
+    if (product.isSuspended) {
+      logger.info(`Produto ${product.name} está suspenso - pulando desconto`);
+      continue;
+    }
+
     // Calcula nova quantidade restante
     const dailyUsage = product.dailyUsage || 0;
     const currentRemaining = product.remainingQuantity || 0;

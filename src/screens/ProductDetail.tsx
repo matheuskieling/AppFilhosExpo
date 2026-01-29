@@ -43,6 +43,7 @@ export default function ProductDetail({ navigation, route }: any) {
   const [showCalibrateModal, setShowCalibrateModal] = useState(false);
   const [calibrateQuantity, setCalibrateQuantity] = useState('1');
   const [savingCalibrate, setSavingCalibrate] = useState(false);
+  const [togglingSupend, setTogglingSuspend] = useState(false);
 
   // Image entrance animation
   useEffect(() => {
@@ -251,6 +252,25 @@ export default function ProductDetail({ navigation, route }: any) {
     );
   };
 
+  const handleToggleSuspend = async () => {
+    if (!user || !product) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setTogglingSuspend(true);
+    try {
+      const newSuspendedState = !product.isSuspended;
+      await updateProduct(user.uid, productId, { isSuspended: newSuspendedState });
+      setProduct({ ...product, isSuspended: newSuspendedState });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.error('Erro ao alterar suspensão:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Erro', 'Não foi possível alterar o status');
+    } finally {
+      setTogglingSuspend(false);
+    }
+  };
+
   const getDaysUntilEmpty = () => {
     if (!product || product.dailyUsage <= 0) return Infinity;
     return Math.ceil(product.remainingQuantity / product.dailyUsage);
@@ -362,6 +382,59 @@ export default function ProductDetail({ navigation, route }: any) {
           <Text style={styles.infoLabel}>Notificar</Text>
           <Text style={styles.infoValue}>{product.notificationDays} dias antes</Text>
         </View>
+
+        {/* Card de Suspensão */}
+        <TouchableOpacity
+          style={[
+            styles.suspendCard,
+            product.isSuspended && styles.suspendCardActive,
+          ]}
+          onPress={handleToggleSuspend}
+          disabled={togglingSupend}
+          activeOpacity={0.7}
+        >
+          <View style={styles.suspendContent}>
+            <View style={[
+              styles.suspendIconContainer,
+              product.isSuspended && styles.suspendIconContainerActive,
+            ]}>
+              <Ionicons
+                name={product.isSuspended ? "pause-circle" : "pause-circle-outline"}
+                size={24}
+                color={product.isSuspended ? "#fff" : "#6b7280"}
+              />
+            </View>
+            <View style={styles.suspendTextContainer}>
+              <Text style={[
+                styles.suspendTitle,
+                product.isSuspended && styles.suspendTitleActive,
+              ]}>
+                {product.isSuspended ? 'Uso Suspenso' : 'Suspender Uso'}
+              </Text>
+              <Text style={[
+                styles.suspendDescription,
+                product.isSuspended && styles.suspendDescriptionActive,
+              ]}>
+                {product.isSuspended
+                  ? 'O estoque não está sendo descontado'
+                  : 'Pausar desconto diário do estoque'}
+              </Text>
+            </View>
+          </View>
+          <View style={[
+            styles.suspendToggle,
+            product.isSuspended && styles.suspendToggleActive,
+          ]}>
+            {togglingSupend ? (
+              <ActivityIndicator size="small" color={product.isSuspended ? "#fff" : "#6b7280"} />
+            ) : (
+              <View style={[
+                styles.suspendToggleKnob,
+                product.isSuspended && styles.suspendToggleKnobActive,
+              ]} />
+            )}
+          </View>
+        </TouchableOpacity>
 
         {/* Botões de Ação */}
         <View style={styles.actionButtons}>
@@ -668,6 +741,83 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
+  },
+  suspendCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 5,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  suspendCardActive: {
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
+  },
+  suspendContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  suspendIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  suspendIconContainerActive: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  suspendTextContainer: {
+    flex: 1,
+  },
+  suspendTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 2,
+  },
+  suspendTitleActive: {
+    color: '#fff',
+  },
+  suspendDescription: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  suspendDescriptionActive: {
+    color: 'rgba(255,255,255,0.85)',
+  },
+  suspendToggle: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#e5e7eb',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  suspendToggleActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  suspendToggleKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  suspendToggleKnobActive: {
+    alignSelf: 'flex-end',
   },
   actionButtons: {
     flexDirection: 'row',

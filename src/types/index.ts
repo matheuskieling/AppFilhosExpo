@@ -9,6 +9,7 @@ export interface Product {
   remainingQuantity: number; // quantidade restante
   notificationDays: number; // dias antes de acabar para notificar
   categoryId?: string;
+  isSuspended?: boolean; // se true, não desconta estoque diariamente
   createdAt?: Date;
   updatedAt?: Date;
 }
