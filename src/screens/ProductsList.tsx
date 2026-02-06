@@ -238,12 +238,14 @@ export default function ProductsList({ navigation }: any) {
     return product.categoryId === activeFilter;
   });
 
-  // Group products by status
-  const urgentProducts = filteredProducts.filter(p => {
+  // Group products by status (suspensos ficam separados)
+  const suspendedProducts = filteredProducts.filter(p => p.isSuspended);
+  const activeProducts = filteredProducts.filter(p => !p.isSuspended);
+  const urgentProducts = activeProducts.filter(p => {
     const status = getStatus(p.daysUntilEmpty, p.notificationDays);
     return status === 'urgent' || status === 'attention';
   });
-  const okProducts = filteredProducts.filter(p => {
+  const okProducts = activeProducts.filter(p => {
     const status = getStatus(p.daysUntilEmpty, p.notificationDays);
     return status === 'ok';
   });
@@ -476,6 +478,8 @@ export default function ProductsList({ navigation }: any) {
             ...urgentProducts.map(p => ({ type: 'product' as const, data: p })),
             ...(okProducts.length > 0 ? [{ type: 'header' as const, title: 'Estoque OK', count: okProducts.length, color: '#28a745' }] : []),
             ...okProducts.map(p => ({ type: 'product' as const, data: p })),
+            ...(suspendedProducts.length > 0 ? [{ type: 'header' as const, title: 'Suspensos', count: suspendedProducts.length, color: '#f97316' }] : []),
+            ...suspendedProducts.map(p => ({ type: 'product' as const, data: p })),
           ]}
           renderItem={({ item }) => {
             if (item.type === 'header') {
