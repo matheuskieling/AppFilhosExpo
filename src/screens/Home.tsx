@@ -139,10 +139,11 @@ export default function Home({ navigation }: any) {
     loadData();
   };
 
-  // Calculate status counts
-  const urgentProducts = products.filter(p => getStatus(p.daysUntilEmpty, p.notificationDays) === 'urgent');
-  const attentionProducts = products.filter(p => getStatus(p.daysUntilEmpty, p.notificationDays) === 'attention');
-  const okProducts = products.filter(p => getStatus(p.daysUntilEmpty, p.notificationDays) === 'ok');
+  // Calculate status counts (exclui produtos suspensos dos alertas)
+  const activeProducts = products.filter(p => !p.isSuspended);
+  const urgentProducts = activeProducts.filter(p => getStatus(p.daysUntilEmpty, p.notificationDays) === 'urgent');
+  const attentionProducts = activeProducts.filter(p => getStatus(p.daysUntilEmpty, p.notificationDays) === 'attention');
+  const okProducts = activeProducts.filter(p => getStatus(p.daysUntilEmpty, p.notificationDays) === 'ok');
   const alertProducts = [...urgentProducts, ...attentionProducts];
 
   // Quick purchase handlers
