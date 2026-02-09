@@ -86,9 +86,23 @@ async function processUserProducts(userId: string): Promise<void> {
 
     // Só notifica se ainda há estoque restante
     if (newRemaining > 0 && daysUntilEmpty <= notificationDays) {
-      await sendLowStockNotification(
-        userId, productId, product.name, Math.ceil(daysUntilEmpty)
-      );
+      // Verifica se já existe compra pendente
+      // (já comprado, aguardando entrega)
+      const pendingPurchases = await db
+        .collection(`users/${userId}/products/${productId}/purchases`)
+        .where("status", "==", "pending")
+        .limit(1)
+        .get();
+
+      if (pendingPurchases.empty) {
+        await sendLowStockNotification(
+          userId, productId, product.name, Math.ceil(daysUntilEmpty)
+        );
+      } else {
+        logger.info(
+          `Produto ${product.name}: notificação suprimida - compra pendente`
+        );
+      }
     }
     // Não envia notificação quando chega a 0
 
