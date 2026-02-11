@@ -16,13 +16,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
-import { getProducts, getCategories, addPurchase } from '../services/firestore';
+import { getProducts, getCategories, addPurchase, getProductIdsWithPendingPurchases } from '../services/firestore';
 import { Product, Category } from '../types';
 import haptics from '../utils/haptics';
 
 interface ProductWithCategory extends Product {
   categoryName?: string;
   daysUntilEmpty: number;
+  hasPendingPurchase?: boolean;
 }
 
 type StatusType = 'urgent' | 'attention' | 'ok';
@@ -105,12 +106,16 @@ export default function Home({ navigation }: any) {
         if (cat.id) categoryMap.set(cat.id, cat.name);
       });
 
+      const productIds = productsData.map((p: Product) => p.id!).filter(Boolean);
+      const pendingIds = await getProductIdsWithPendingPurchases(user.uid, productIds);
+
       const productsWithDetails = productsData.map((product: Product) => ({
         ...product,
         categoryName: product.categoryId ? categoryMap.get(product.categoryId) : undefined,
         daysUntilEmpty: product.dailyUsage > 0
           ? Math.ceil(product.remainingQuantity / product.dailyUsage)
           : Infinity,
+        hasPendingPurchase: pendingIds.has(product.id!),
       }));
 
       productsWithDetails.sort((a, b) => a.daysUntilEmpty - b.daysUntilEmpty);
@@ -139,10 +144,10 @@ export default function Home({ navigation }: any) {
     loadData();
   };
 
-  // Calculate status counts (exclui produtos suspensos dos alertas)
+  // Calculate status counts (exclui produtos suspensos e com compra pendente dos alertas)
   const activeProducts = products.filter(p => !p.isSuspended);
-  const urgentProducts = activeProducts.filter(p => getStatus(p.daysUntilEmpty, p.notificationDays) === 'urgent');
-  const attentionProducts = activeProducts.filter(p => getStatus(p.daysUntilEmpty, p.notificationDays) === 'attention');
+  const urgentProducts = activeProducts.filter(p => !p.hasPendingPurchase && getStatus(p.daysUntilEmpty, p.notificationDays) === 'urgent');
+  const attentionProducts = activeProducts.filter(p => !p.hasPendingPurchase && getStatus(p.daysUntilEmpty, p.notificationDays) === 'attention');
   const okProducts = activeProducts.filter(p => getStatus(p.daysUntilEmpty, p.notificationDays) === 'ok');
   const alertProducts = [...urgentProducts, ...attentionProducts];
 
@@ -286,7 +291,7 @@ export default function Home({ navigation }: any) {
                     <View style={styles.alertInfo}>
                       <Text style={styles.alertName} numberOfLines={1}>{product.name}</Text>
                       <Text style={[styles.alertStatus, { color: statusColor }]}>
-                        {isUrgent ? 'ACABOU!' : `Comprar em ${product.daysUntilEmpty} dias`}
+                        {isUrgent ? 'ACABOU!' : `Acaba em ${product.daysUntilEmpty} dias`}
                       </Text>
                     </View>
                   </View>

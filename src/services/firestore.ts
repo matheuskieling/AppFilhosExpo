@@ -8,6 +8,8 @@ import {
   getDoc,
   query,
   orderBy,
+  where,
+  limit,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
@@ -182,6 +184,28 @@ export const deletePurchase = async (
       await updateProduct(userId, productId, { remainingQuantity: newRemaining });
     }
   }
+};
+
+// ==================== PENDING PURCHASES CHECK ====================
+
+export const getProductIdsWithPendingPurchases = async (
+  userId: string,
+  productIds: string[]
+): Promise<Set<string>> => {
+  const idsWithPending = new Set<string>();
+
+  await Promise.all(
+    productIds.map(async (productId) => {
+      const purchasesRef = collection(db, `users/${userId}/products/${productId}/purchases`);
+      const q = query(purchasesRef, where('status', '==', PurchaseStatus.PENDING), limit(1));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        idsWithPending.add(productId);
+      }
+    })
+  );
+
+  return idsWithPending;
 };
 
 // ==================== ALL PURCHASES (para histórico geral) ====================
