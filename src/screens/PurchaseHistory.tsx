@@ -285,13 +285,17 @@ const styles = StyleSheet.create({
   },
   purchaseInfo: {
     flex: 1,
-    marginLeft: 15,
+    flexShrink: 1,
+    marginLeft: 12,
+    marginRight: 10,
   },
   purchaseMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 2,
+    flexWrap: 'wrap',
+    flexShrink: 1,
+    gap: 4,
+    marginTop: 4,
   },
   productName: {
     fontSize: 16,
