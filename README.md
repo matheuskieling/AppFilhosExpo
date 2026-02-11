@@ -1,16 +1,16 @@
 # Filhos Estoque
 
-Aplicativo para gerenciar o estoque de ração e remédios dos nossos cachorros. Ele controla a quantidade restante de cada produto, desconta automaticamente o uso diário e nos avisa quando está na hora de comprar mais.
+App to manage food and medicine stock for our dogs. It tracks the remaining quantity of each product, automatically deducts daily usage, and notifies us when it's time to buy more.
 
-## Funcionalidades
+## Features
 
-- **Cadastro de produtos** com foto, quantidade total, uso diário e janela de notificação
-- **Controle automático de estoque** com desconto diário da quantidade restante
-- **Registro de compras** com histórico completo por produto
-- **Push notifications** avisando quando um produto está perto de acabar
-- **Categorias** para organizar os produtos (ração, remédios, etc.)
-- **Previsão de fim de estoque** com data estimada calculada automaticamente
-- **Suspensão de produtos** para pausar o desconto diário quando necessário
+- **Product registration** with photo, total quantity, daily usage and notification window
+- **Automatic stock control** with daily deduction from remaining quantity
+- **Purchase tracking** with full history per product
+- **Push notifications** when a product is running low
+- **Categories** to organize products (food, medicine, etc.)
+- **Stock forecast** with automatically calculated estimated end date
+- **Product suspension** to pause daily deduction when needed
 
 ## Tech Stack
 
@@ -18,42 +18,42 @@ Aplicativo para gerenciar o estoque de ração e remédios dos nossos cachorros.
 - TypeScript
 - Firebase (Authentication + Firestore)
 - Expo Notifications (push notifications)
-- React Navigation (navegação com tabs e stack)
+- React Navigation (tabs and stack navigation)
 
 ## Setup
 
-1. Clone o repositório
-2. Instale as dependências:
+1. Clone the repository
+2. Install dependencies:
    ```bash
    npm install
    ```
-3. Configure as credenciais:
-   - Copie `src/config/secrets.example.ts` para `src/config/secrets.ts` e preencha os Client IDs do Google OAuth
-   - Adicione o `google-services.json` do Firebase na raiz do projeto
-4. Inicie o servidor de desenvolvimento:
+3. Configure credentials:
+   - Copy `src/config/secrets.example.ts` to `src/config/secrets.ts` and fill in the Google OAuth Client IDs
+   - Add the Firebase `google-services.json` to the project root
+4. Start the development server:
    ```bash
    npm start
    ```
 
 ## Scripts
 
-| Comando | Descricao |
+| Command | Description |
 |---|---|
-| `npm start` | Inicia o servidor Expo |
-| `npm run android` | Roda no Android |
-| `npm run ios` | Roda no iOS |
-| `npm run web` | Roda no navegador |
-| `npm run build:preview` | Gera APK de teste via EAS |
+| `npm start` | Start Expo dev server |
+| `npm run android` | Run on Android |
+| `npm run ios` | Run on iOS |
+| `npm run web` | Run in browser |
+| `npm run build:preview` | Build test APK via EAS |
 
-## Estrutura do Projeto
+## Project Structure
 
 ```
 src/
-  config/       # Firebase e credenciais OAuth
-  contexts/     # AuthContext (estado global de autenticacao)
-  navigation/   # React Navigation (rotas baseadas em auth)
-  screens/      # Telas do app
+  config/       # Firebase and OAuth credentials
+  contexts/     # AuthContext (global auth state)
+  navigation/   # React Navigation (auth-based routing)
+  screens/      # App screens
   services/     # Firestore, notifications, storage
-  types/        # Tipos TypeScript (Product, Purchase, Category)
-  utils/        # Utilitarios (haptics)
+  types/        # TypeScript types (Product, Purchase, Category)
+  utils/        # Utilities (haptics)
 ```
